@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import os
 from typing import Dict, List, Tuple
 
 import torch
@@ -29,7 +30,16 @@ def policy_device(cfg: AttrDict, policy_id: PolicyID) -> torch.device:
     if cfg.device == "cpu":
         return torch.device("cpu")
     else:
-        return torch.device("cuda", index=gpus_for_process(policy_id, 1)[0])
+        gpus = gpus_for_process(policy_id, 1)
+        if not gpus:
+            log.warning(
+                f"No GPUs available for policy {policy_id} (cfg.device='{cfg.device}'), falling back to CPU. "
+                f"CUDA_VISIBLE_DEVICES={os.environ.get('CUDA_VISIBLE_DEVICES', 'not set')}, "
+                f"torch.cuda.is_available()={torch.cuda.is_available()}"
+            )
+            return torch.device("cpu")
+        log.debug(f"Using GPU {gpus[0]} for policy {policy_id}")
+        return torch.device("cuda", index=gpus[0])
 
 
 def init_tensor(leading_dimensions: List, tensor_type, tensor_shape, device: torch.device, share: bool) -> Tensor:

@@ -23,6 +23,16 @@ from sample_factory.utils.attr_dict import AttrDict
 from sample_factory.utils.typing import Config, StatusCode
 from sample_factory.utils.utils import debug_log_every_n, experiment_dir, log
 
+## DEBUG ACTION RECORDING ##
+import atexit
+import json
+recorded_actions: list = []
+def _dump_actions():
+    with open('recorded_actions.json', 'w') as f:
+        json.dump(recorded_actions, f, indent=2)
+
+atexit.register(_dump_actions)
+## --------------------- ##
 
 def visualize_policy_inputs(normalized_obs: Dict[str, Tensor]) -> None:
     """
@@ -175,6 +185,7 @@ def enjoy(cfg: Config) -> Tuple[StatusCode, float]:
             if actions.ndim == 1:
                 actions = unsqueeze_tensor(actions, dim=-1)
             actions = preprocess_actions(env_info, actions)
+            recorded_actions.append(actions.tolist()) ## DEBUG ACTION RECORDING
 
             rnn_states = policy_outputs["new_rnn_states"]
 

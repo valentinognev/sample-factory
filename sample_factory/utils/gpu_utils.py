@@ -14,7 +14,18 @@ def set_global_cuda_envvars(cfg):
         if cfg.device == "cpu":
             available_gpus = ""
         else:
+            # Try subprocess method first (doesn't trigger PyTorch CUDA init)
             available_gpus = get_gpus_without_triggering_pytorch_cuda_initialization(os.environ)
+            # If subprocess failed or returned empty, try PyTorch directly
+            if not available_gpus or not available_gpus.strip():
+                try:
+                    if torch.cuda.is_available():
+                        device_count = torch.cuda.device_count()
+                        if device_count > 0:
+                            available_gpus = ",".join(str(g) for g in range(device_count))
+                            log.debug(f"Subprocess GPU detection failed, using PyTorch: detected {device_count} GPU(s)")
+                except Exception as e:
+                    log.debug(f"PyTorch GPU detection also failed: {e}")
         os.environ[CUDA_ENVVAR] = available_gpus
     log.info(f"Environment var {CUDA_ENVVAR} is {os.environ[CUDA_ENVVAR]}")
 
@@ -22,9 +33,44 @@ def set_global_cuda_envvars(cfg):
 def get_available_gpus() -> List[int]:
     """
     Returns indices of GPUs specified by CUDA_VISIBLE_DEVICES.
+    If CUDA_VISIBLE_DEVICES is not set or is empty, detects GPUs using PyTorch or subprocess.
     """
-    orig_visible_devices = os.environ[f"{CUDA_ENVVAR}"]
-    available_gpus = [int(g.strip()) for g in orig_visible_devices.split(",") if g and not g.isspace()]
+    # Check if CUDA_VISIBLE_DEVICES is not set or is empty (treat empty string as not set)
+    cuda_visible = os.environ.get(CUDA_ENVVAR, "").strip()
+    if not cuda_visible:
+        # If CUDA_VISIBLE_DEVICES is not set or is empty, try to detect GPUs
+        # First try PyTorch directly (fastest if CUDA is already initialized)
+        try:
+            if torch.cuda.is_available():
+                device_count = torch.cuda.device_count()
+                if device_count > 0:
+                    log.debug(f"CUDA_VISIBLE_DEVICES not set or empty, detected {device_count} GPU(s) via PyTorch")
+                    return list(range(device_count))
+            else:
+                log.debug("PyTorch reports CUDA is not available")
+        except Exception as e:
+            log.debug(f"PyTorch CUDA check failed: {e}")
+        
+        # Fallback: try subprocess method (doesn't require PyTorch CUDA to be initialized)
+        try:
+            gpu_string = get_gpus_without_triggering_pytorch_cuda_initialization(os.environ)
+            # Strip whitespace and newlines from the output
+            gpu_string = gpu_string.strip() if gpu_string else ""
+            if gpu_string:
+                available_gpus = [int(g.strip()) for g in gpu_string.split(",") if g and not g.isspace()]
+                if available_gpus:
+                    log.debug(f"CUDA_VISIBLE_DEVICES not set or empty, detected {len(available_gpus)} GPU(s) via subprocess: {available_gpus}")
+                    return available_gpus
+        except Exception as e:
+            log.debug(f"Error detecting GPUs via subprocess: {e}")
+        
+        log.warning("CUDA_VISIBLE_DEVICES not set or empty and no GPUs detected via PyTorch or subprocess")
+        return []
+    
+    # CUDA_VISIBLE_DEVICES is set to a non-empty value, parse it
+    available_gpus = [int(g.strip()) for g in cuda_visible.split(",") if g and not g.isspace()]
+    if not available_gpus:
+        log.debug(f"CUDA_VISIBLE_DEVICES is set to '{cuda_visible}' but no valid GPUs found")
     return available_gpus
 
 
