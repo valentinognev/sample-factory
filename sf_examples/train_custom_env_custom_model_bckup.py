@@ -97,45 +97,33 @@ def override_default_params(parser):
 
 
 class CustomEncoder(Encoder):
-    """Custom encoder using MLP layers instead of Conv2D."""
+    """Just an example of how to use a custom model component."""
 
     def __init__(self, cfg, obs_space):
         super().__init__(cfg)
 
         obs_shape = obs_space["obs"].shape
-        
-        # Handle both vector and image observations
-        if len(obs_shape) == 1:
-            # Vector observation: use shape[0] directly
-            input_size = obs_shape[0]
-        else:
-            # Image observation: flatten all dimensions
-            input_size = obs_shape[0] * obs_shape[1] * obs_shape[2] if len(obs_shape) == 3 else obs_shape[0] * obs_shape[1]
 
-        # Use MLP layers instead of Conv2D
-        # Default to [512, 512] if encoder_mlp_layers is not set, otherwise use cfg.encoder_mlp_layers
-        mlp_layer_sizes = getattr(cfg, "encoder_mlp_layers", [64, 64, 64])
-        activation = nonlinearity(cfg)
-        
-        self.mlp_head = create_mlp(mlp_layer_sizes, input_size, activation)
-        # Calculate output size: if MLP layers exist, output is last layer size, otherwise input_size
-        self.encoder_out_size = mlp_layer_sizes[-1] if len(mlp_layer_sizes) > 0 else input_size
+        conv_layers = [
+            nn.Conv2d(1, 8, 3, stride=2),
+            nonlinearity(cfg),
+            nn.Conv2d(8, 16, 2, stride=1),
+            nonlinearity(cfg),
+        ]
+
+        self.conv_head = nn.Sequential(*conv_layers)
+        self.conv_head_out_size = calc_num_elements(self.conv_head, obs_shape)
 
     def forward(self, obs_dict):
         # we always work with dictionary observations. Primary observation is available with the key 'obs'
         main_obs = obs_dict["obs"]
-        
-        # Flatten if needed (for multi-dimensional observations)
-        if len(main_obs.shape) > 2:
-            x = main_obs.view(main_obs.size(0), -1)
-        else:
-            x = main_obs
 
-        x = self.mlp_head(x)
+        x = self.conv_head(main_obs)
+        x = x.view(-1, self.conv_head_out_size)
         return x
 
     def get_out_size(self) -> int:
-        return self.encoder_out_size
+        return self.conv_head_out_size
 
 
 def make_custom_encoder(cfg: Config, obs_space: ObsSpace) -> Encoder:

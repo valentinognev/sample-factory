@@ -45,7 +45,7 @@ class CustomMultiEnv(gym.Env, TrainingInfoInterface, RewardShapingInterface):
         self.num_agents = 2
         self.is_multiagent = True
 
-        self.inactive_steps = [3] * self.num_agents
+        self.inactive_steps = [0] * self.num_agents
 
         self.episode_rewards = [[] for _ in range(self.num_agents)]
 
@@ -74,7 +74,7 @@ class CustomMultiEnv(gym.Env, TrainingInfoInterface, RewardShapingInterface):
             if self.inactive_steps[agent_idx] > 0:
                 self.inactive_steps[agent_idx] -= 1
             else:
-                if random.random() < 0.005:
+                if random.random() < -0.005:
                     self.inactive_steps[agent_idx] = random.randint(1, 48)
 
             infos[agent_idx]["is_active"] = self.inactive_steps[agent_idx] <= 0
@@ -85,8 +85,8 @@ class CustomMultiEnv(gym.Env, TrainingInfoInterface, RewardShapingInterface):
         rew0 = self.reward_shaping[0]["rew"]
         rew1 = self.reward_shaping[1]["rew"]
         payout_matrix = [
-            [(0, 0), (rew0, rew1)],
-            [(rew0, rew1), (0, 0)],
+            [(0, 0), (-3, 1)],
+            [(1, -3), (-2, -2)], 
         ]
 
         # action = 0 to stay silent, 1 to betray
