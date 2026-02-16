@@ -1,8 +1,19 @@
 from __future__ import annotations
 
 import os
+import sys
 from threading import Thread
 from typing import Dict, Optional
+
+# Set before importing torch so spawned worker process can load cuDNN
+if getattr(sys, "prefix", None):
+    _cudnn = os.path.join(
+        sys.prefix, "lib", f"python{sys.version_info.major}.{sys.version_info.minor}",
+        "site-packages", "nvidia", "cudnn", "lib",
+    )
+    if os.path.isdir(_cudnn):
+        _existing = os.environ.get("LD_LIBRARY_PATH", "")
+        os.environ["LD_LIBRARY_PATH"] = _cudnn + (os.pathsep + _existing if _existing else "")
 
 import psutil
 import torch

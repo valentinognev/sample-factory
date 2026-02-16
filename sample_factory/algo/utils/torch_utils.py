@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from typing import Optional
 
 import numpy as np
@@ -15,7 +16,9 @@ def init_torch_runtime(cfg: AttrDict, max_num_threads: Optional[int] = 1):
         torch.set_num_threads(max_num_threads)
     if cfg.device == "gpu":
         # noinspection PyUnresolvedReferences
-        torch.backends.cudnn.benchmark = True
+        # Disable benchmark when SF_DISABLE_CUDNN_BENCHMARK=1 to avoid multiprocess init hangs
+        if os.environ.get("SF_DISABLE_CUDNN_BENCHMARK", "").strip() != "1":
+            torch.backends.cudnn.benchmark = True
 
 
 def inference_context(is_serial):

@@ -212,7 +212,9 @@ class Learner(Configurable):
         self.actor_critic = create_actor_critic(self.cfg, self.env_info.obs_space, self.env_info.action_space)
         log.debug("Created Actor Critic model with architecture:")
         log.debug(self.actor_critic)
+        log.info("Moving model to device %s...", self.device)
         self.actor_critic.model_to_device(self.device)
+        log.info("Model on device; loading checkpoint...")
 
         def share_mem(t):
             if t is not None and not t.is_cuda:
@@ -243,6 +245,7 @@ class Learner(Configurable):
         self.optimizer = optimizer_cls(params, **optimizer_kwargs)
 
         self.load_from_checkpoint(self.policy_id)
+        log.info("Checkpoint loaded; initializing parameter server...")
         self.param_server.init(self.actor_critic, self.train_step, self.device)
         self.policy_versions_tensor[self.policy_id] = self.train_step
 
@@ -251,6 +254,7 @@ class Learner(Configurable):
         self._apply_lr(self.curr_lr)
 
         self.is_initialized = True
+        log.info("Learner initialized.")
 
         return model_initialization_data(self.cfg, self.policy_id, self.actor_critic, self.train_step, self.device)
 

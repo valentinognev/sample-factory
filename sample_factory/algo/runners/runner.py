@@ -339,7 +339,9 @@ class Runner(EventLoopObject, Configurable):
             for policy_id in range(self.cfg.num_policies):
                 reward_stats = self.policy_avg_stats["reward"][policy_id]
                 if len(reward_stats) > 0:
-                    policy_reward_stats.append((policy_id, f"{np.mean(reward_stats):.3f}"))
+                    mean_r = np.mean(reward_stats)
+                    std_r = np.std(reward_stats) if len(reward_stats) > 1 else 0.0
+                    policy_reward_stats.append((policy_id, f"{mean_r:.3f} ± {std_r:.3f} (n={len(reward_stats)})"))
             log.debug("Avg episode reward: %r", policy_reward_stats)
 
     def _update_stats_and_print_report(self):
