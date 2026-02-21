@@ -252,10 +252,18 @@ def load_from_checkpoint(cfg: Config) -> AttrDict:
             loaded_cfg[key] = value
 
     # incorporate extra CLI parameters that were not present in JSON file
+    # Use vars(cfg) and also cfg's keys when cfg is dict-like (e.g. AttrDict stores data in dict, not __dict__)
+    seen = set()
     for key, value in vars(cfg).items():
         if key not in loaded_cfg:
             log.debug("Adding new argument %r=%r that is not in the saved config file!", key, value)
             loaded_cfg[key] = value
+        seen.add(key)
+    if hasattr(cfg, "keys"):
+        for key in cfg.keys():
+            if key not in seen and key not in loaded_cfg:
+                log.debug("Adding new argument %r=%r that is not in the saved config file!", key, cfg[key])
+                loaded_cfg[key] = cfg[key]
 
     return loaded_cfg
 
@@ -270,6 +278,9 @@ def maybe_load_from_checkpoint(cfg: Config) -> AttrDict:
     if not os.path.isfile(filename):
         log.warning("Saved parameter configuration for experiment %s not found!", cfg.experiment)
         log.warning("Starting experiment from scratch!")
+        # Copy cfg into AttrDict: if cfg is dict-like use its keys; else use vars() (Namespace)
+        if isinstance(cfg, dict):
+            return AttrDict(cfg)
         return AttrDict(vars(cfg))
 
     return load_from_checkpoint(cfg)
