@@ -305,9 +305,16 @@ class Learner(Configurable):
             log.debug("Did not load from checkpoint, starting from scratch!")
         else:
             log.debug("Loading model from checkpoint")
-
-            # if we're replacing our policy with another policy (under PBT), let's not reload the env_steps
-            self._load_state(checkpoint_dict, load_progress=load_progress)
+            try:
+                self._load_state(checkpoint_dict, load_progress=load_progress)
+            except RuntimeError as e:
+                if "size mismatch" in str(e) or "Error(s) in loading state_dict" in str(e):
+                    log.warning(
+                        "Checkpoint has different model/observation layout (e.g. encoder input dim). "
+                        "Starting training from scratch."
+                    )
+                else:
+                    raise
 
     def _should_save_summaries(self):
         summaries_every_seconds = self.summary_rate_decay_seconds.at(self.train_step)

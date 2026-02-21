@@ -1,3 +1,4 @@
+import os
 import time
 from collections import deque
 from typing import Dict, Optional, Tuple
@@ -100,14 +101,35 @@ def make_env(cfg: Config, render_mode: Optional[str] = None) -> BatchedVecEnv:
 
 
 def load_state_dict(cfg: Config, actor_critic: ActorCritic, device: torch.device) -> None:
-    policy_id = cfg.policy_index
-    name_prefix = dict(latest="checkpoint", best="best")[cfg.load_checkpoint_kind]
-    checkpoints = Learner.get_checkpoints(Learner.checkpoint_dir(cfg, policy_id), f"{name_prefix}_*")
+    policy_id = getattr(cfg, "policy_index", 0)
+    load_kind = getattr(cfg, "load_checkpoint_kind", "latest")
+    checkpoint_dir = Learner.checkpoint_dir(cfg, policy_id)
+    name_prefix = dict(latest="checkpoint", best="best")[load_kind]
+    checkpoints = Learner.get_checkpoints(checkpoint_dir, f"{name_prefix}_*")
+    # If requested kind not found, try the other (e.g. only best or only latest saved)
+    if not checkpoints and load_kind == "latest":
+        checkpoints = Learner.get_checkpoints(checkpoint_dir, "best_*")
+        if checkpoints:
+            log.warning("No latest checkpoints found; loading best checkpoint instead.")
+    if not checkpoints and load_kind == "best":
+        checkpoints = Learner.get_checkpoints(checkpoint_dir, "checkpoint_*")
+        if checkpoints:
+            log.warning("No best checkpoints found; loading latest checkpoint instead.")
     checkpoint_dict = Learner.load_checkpoint(checkpoints, device)
     if checkpoint_dict:
         actor_critic.load_state_dict(checkpoint_dict["model"])
     else:
-        raise RuntimeError("Could not load checkpoint")
+        abs_dir = os.path.abspath(checkpoint_dir)
+        try:
+            contents = os.listdir(checkpoint_dir)
+        except OSError:
+            contents = []
+        raise RuntimeError(
+            f"Could not load checkpoint. Directory: {abs_dir!r}. "
+            f"Requested: {load_kind} (pattern {name_prefix}_*). "
+            f"Contents: {contents!r}. "
+            f"Run from the folder that contains train_dir, or set --train_dir to an absolute path."
+        )
 
 
 def enjoy(cfg: Config) -> Tuple[StatusCode, float]:
@@ -298,6 +320,7 @@ def enjoy(cfg: Config) -> Tuple[StatusCode, float]:
         )
         push_to_hf(experiment_dir(cfg=cfg), cfg.hf_repository)
 
-    return ExperimentStatus.SUCCESS, sum([sum(episode_rewards[i]) for i in range(env.num_agents)]) / sum(
-        [len(episode_rewards[i]) for i in range(env.num_agents)]
-    )
+    total_rew = sum([sum(episode_rewards[i]) for i in range(env.num_agents)])
+    num_episodes = sum([len(episode_rewards[i]) for i in range(env.num_agents)])
+    avg_reward = total_rew / num_episodes if num_episodes else 0.0
+    return ExperimentStatus.SUCCESS, avg_reward
