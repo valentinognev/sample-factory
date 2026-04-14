@@ -296,6 +296,13 @@ class RolloutWorker(HeartbeatStoppableEventLoopObject, Configurable):
         """Update training info, this will be propagated to environments using TrainingInfoInterface and RewardShapingInterface."""
         for policy_id, info in training_info.items():
             self.training_info[policy_id] = info
+        # Push to envs immediately so reward shaping / curricula see up-to-date approx_total_training_steps
+        # (not only on episode end; otherwise resume and early-episode steps see 0).
+        if not self.is_initialized:
+            return
+        for runner in self.env_runners:
+            if hasattr(runner, "propagate_training_info_to_envs"):
+                runner.propagate_training_info_to_envs()
 
     def on_stop(self, *args):
         for env_runner in self.env_runners:

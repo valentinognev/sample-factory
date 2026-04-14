@@ -368,6 +368,12 @@ class NonBatchedVectorEnvRunner(VectorEnvRunner):
 
         self.policy_mgr = AgentPolicyMapping(self.cfg, self.env_info)
 
+    def propagate_training_info_to_envs(self) -> None:
+        """Apply latest runner training_info to envs (see RolloutWorker.on_update_training_info)."""
+        for env_i in range(self.num_envs):
+            for agent_i in range(self.num_agents):
+                self.actor_states[env_i][agent_i]._update_training_info()
+
     def init(self, timing: Timing):
         """
         Actually instantiate the env instances.

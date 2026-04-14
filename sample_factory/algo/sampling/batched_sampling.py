@@ -151,6 +151,15 @@ class BatchedVectorEnvRunner(VectorEnvRunner):
 
         self.device: Optional[torch.device] = None
 
+    def propagate_training_info_to_envs(self) -> None:
+        """Apply latest runner training_info (see RolloutWorker.on_update_training_info)."""
+        if self.vec_env is None or self.env_training_info_interface is None:
+            return
+        if self.training_info[self.policy_id] is not None:
+            reward_shaping = self.training_info[self.policy_id].get("reward_shaping", None)
+            set_reward_shaping(self.vec_env, reward_shaping, slice(0, self.vec_env.num_agents))
+            set_training_info(self.env_training_info_interface, self.training_info[self.policy_id])
+
     def init(self, timing):
         """
         Actually instantiate the env instances.
